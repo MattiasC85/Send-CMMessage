@@ -114,7 +114,7 @@ If ($WinPE -eq $false)
 		$Failed=$True
 		Write-Host "Failed finding SMS certificates."
 		Write-Host "Probably not a ConfigMgr-Client."
-        $NeedForReg=$True
+        	$NeedForReg=$True
 		$SignCert=CreateFakeCert
 	}
 }
