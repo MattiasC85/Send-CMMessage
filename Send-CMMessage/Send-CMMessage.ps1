@@ -37,13 +37,11 @@ Param (
 )
 
 
-#$ScriptDir="D:\sccmmessaget\Publish"
 $ScriptDir=[System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition)
 write-host ""
 Add-type -path $ScriptDir\Microsoft.ConfigurationManagement.Messaging.dll
 
 Start-Transcript -Path $env:TEMP\StatusMsg.log -Append
-#Add-type -path $ScriptDir"\Microsoft.ConfigurationManagement.Messaging.dll"
 
 $WinPE=$False
 $RunningInTS=$True
@@ -104,8 +102,8 @@ If ($WinPE -eq $false)
 		
 		$SignCert = (@(Get-ChildItem -Path "Cert:\LocalMachine\SMS" | Where-Object { $_.FriendlyName -eq "SMS Signing Certificate" }) | Sort-Object -Property NotBefore -Descending)[0]
 		$SignCert= [Microsoft.ConfigurationManagement.Messaging.Framework.MessageCertificateX509File]::new('SMS', $SignCert.Thumbprint)
-		$EncCert = (@(Get-ChildItem -Path 'Cert:\LocalMachine\SMS' | Where-Object { $_.FriendlyName -eq 'SMS Encryption Certificate' }) | Sort-Object -Property NotBefore -Descending)[0]
-		$EncCert=[Microsoft.ConfigurationManagement.Messaging.Framework.MessageCertificateX509File]::new('SMS', $EncCert.Thumbprint)
+		#$EncCert = (@(Get-ChildItem -Path 'Cert:\LocalMachine\SMS' | Where-Object { $_.FriendlyName -eq 'SMS Encryption Certificate' }) | Sort-Object -Property NotBefore -Descending)[0]
+		#$EncCert=[Microsoft.ConfigurationManagement.Messaging.Framework.MessageCertificateX509File]::new('SMS', $EncCert.Thumbprint)
 		$SMSID=get-wmiobject -ComputerName '.' -Namespace root\ccm -Query "Select ClientID from CCM_Client" |% ClientID
 		
 		$MPHost=(get-wmiobject -Class SMS_Authority -Namespace "root\ccm").CurrentManagementPoint
@@ -161,7 +159,6 @@ $Request.Settings.HostName = $MPHost
 [void]$Request.Discover() 
 $Request.AgentIdentity = $AgentIdentity
 $Request.NetBiosName = $Name
-#$Request.NetBiosName = $Env:ComputerName
 $Request.Settings.Compression = [Microsoft.ConfigurationManagement.Messaging.Framework.MessageCompression]::Zlib
 $Request.Settings.ReplyCompression = [Microsoft.ConfigurationManagement.Messaging.Framework.MessageCompression]::Zlib
 $SMSID=$Request.RegisterClient($Sender, [TimeSpan]::FromMinutes(5))
@@ -171,9 +168,7 @@ $Message =[Microsoft.ConfigurationManagement.Messaging.Messages.ConfigMgrStatusM
 $Message.Discover()
 $Message.Initialize()
 $Message.StatusMessage.StatusMessageType= $ClassName
-#$Message.ClientId=$SMSID
 $Message.Settings.HostName=$MPHost
-#$Message.SiteCode="CM1"
 $Message.SmsId=$SMSID
 write-host ""
 Write-host "Properties:"
@@ -200,14 +195,14 @@ write-host $Prop.Name=($Prop.valueString)
 $Message.StatusMessage.Properties.Properties.Add($Prop)
 
 
-$Mins=Get-TimeZone | % {$_.BaseUtcOffset.TotalMinutes}
+#$Mins=Get-TimeZone | % {$_.BaseUtcOffset.TotalMinutes}
 
-if ([int]$Mins -lt 100)
-{
-$Mins=("0"+$Mins.ToString())
-}
-$dateStr=Get-date -Format "yyyyMMddhhmmss.000000+$Mins"
-$dateStr=Get-date -Format "yyyyMMddhhmmss.000000+000"
+#if ([int]$Mins -lt 100)
+#{
+#$Mins=("0"+$Mins.ToString())
+#}
+#$dateStr=Get-date -Format "yyyyMMddhhmmss.000000+$Mins"
+#$dateStr=Get-date -Format "yyyyMMddhhmmss.000000+000"
 
 #$Prop=[Microsoft.ConfigurationManagement.Messaging.Messages.StatusMessageProperty]::new("DateTime",$dateStr)
 #$Message.StatusMessage.Properties.Properties.Add($Prop)
