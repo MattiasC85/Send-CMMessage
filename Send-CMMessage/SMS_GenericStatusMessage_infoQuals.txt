@@ -3,4 +3,4 @@ SMS_Component=Wooot
 SMS_MessageID=1073781821
 SMS_MessageType=768
 SMS_ModuleName=SMS Provider
-SMS_PerClient=True                             
+SMS_PerClient=True
