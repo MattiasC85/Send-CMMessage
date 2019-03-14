@@ -1,3 +1,8 @@
+#	Version 0.2
+#
+#	0.2:
+#	Fixed multiple computer resources beeing created.
+
 Param (
    [Parameter(ValueFromPipelineByPropertyName,Mandatory=$False)]
    [string] $MP,
@@ -37,11 +42,13 @@ Param (
 )
 
 
-$ScriptDir=[System.IO.Path]::GetDirectoryName($myInvocation.MyCommand.Definition)
+
+$ScriptDir=Split-path $Script:myInvocation.MyCommand.Definition
 write-host ""
 Add-type -path $ScriptDir\Microsoft.ConfigurationManagement.Messaging.dll
 
 Start-Transcript -Path $env:TEMP\StatusMsg.log -Append
+#Add-type -path $ScriptDir"\Microsoft.ConfigurationManagement.Messaging.dll"
 
 $WinPE=$False
 $RunningInTS=$True
@@ -61,17 +68,21 @@ catch
 
 function CreateFakeCert
 {
-    write-host "Creating Fake Certificate for $Name..."
-    $SignCert = [Microsoft.ConfigurationManagement.Messaging.Framework.MessageCertificateX509File]::CreateSelfSignedCertificate(
-    "SCCM Signing Certificate",
-    "$Name SignCert",
-    @('2.5.29.37'),
-    (Get-Date).AddMinutes(-10),
-    (Get-Date).AddYears(5)
-    )
+    write-host "Importing fake certificate..."
+#    $SignCert = [Microsoft.ConfigurationManagement.Messaging.Framework.MessageCertificateX509File]::CreateAndStoreSelfSignedCertificate(
+#    "SCCM Fake Signing Certificate",
+#    "Fake SignCert",
+#    "My",
+#    "LocalMachine",
+#    @('2.5.29.37'),
+#    (Get-Date).AddMinutes(-10),
+#    (Get-Date).AddYears(5)
+#    )
+
+$SignCert= [Microsoft.ConfigurationManagement.Messaging.Framework.MessageCertificateX509Volatile]::new($ScriptDir+'\FakeCert.pfx', 'Pa$$w0rd')
 
 $SMSID=[Microsoft.ConfigurationManagement.Messaging.Framework.SmsClientId]::new()
-write-host "Certificate Created: " $SignCert.X509Certificate.FriendlyName
+write-host "Certificate: " $SignCert.X509Certificate.FriendlyName
 return $SignCert
 }
 
@@ -102,10 +113,7 @@ If ($WinPE -eq $false)
 		
 		$SignCert = (@(Get-ChildItem -Path "Cert:\LocalMachine\SMS" | Where-Object { $_.FriendlyName -eq "SMS Signing Certificate" }) | Sort-Object -Property NotBefore -Descending)[0]
 		$SignCert= [Microsoft.ConfigurationManagement.Messaging.Framework.MessageCertificateX509File]::new('SMS', $SignCert.Thumbprint)
-		#$EncCert = (@(Get-ChildItem -Path 'Cert:\LocalMachine\SMS' | Where-Object { $_.FriendlyName -eq 'SMS Encryption Certificate' }) | Sort-Object -Property NotBefore -Descending)[0]
-		#$EncCert=[Microsoft.ConfigurationManagement.Messaging.Framework.MessageCertificateX509File]::new('SMS', $EncCert.Thumbprint)
 		$SMSID=get-wmiobject -ComputerName '.' -Namespace root\ccm -Query "Select ClientID from CCM_Client" |% ClientID
-		
 		$MPHost=(get-wmiobject -Class SMS_Authority -Namespace "root\ccm").CurrentManagementPoint
         
 	}
@@ -114,7 +122,7 @@ If ($WinPE -eq $false)
 		$Failed=$True
 		Write-Host "Failed finding SMS certificates."
 		Write-Host "Probably not a ConfigMgr-Client."
-        	$NeedForReg=$True
+        $NeedForReg=$True
 		$SignCert=CreateFakeCert
 	}
 }
@@ -123,7 +131,8 @@ else
 Write-host "Running in WinPE."
 $NeedForReg=$True
 $SignCert=CreateFakeCert
-
+#$SMSID="GUID:D692E1BF-5975-4A42-AAB8-D2A62AA87CD8"
+#$SignCert= [Microsoft.ConfigurationManagement.Messaging.Framework.MessageCertificateX509Volatile]::new($ScriptDir+'\FakeCert.pfx', 'Pa$$w0rd')
 }
 
 If($PSBoundParameters.ContainsKey('MP'))
@@ -143,7 +152,7 @@ $Name=$MachineName
 }
 Write-host "MPHost: " $MPHost
 Write-host "Certificate Friendly Name: " $SignCert.X509Certificate.FriendlyName
-write-host "Hostname: " $Name
+write-host "ClientName: " $Name
 write-host "SMSID: " $SMSID
 write-host "Need to register to MP: " $NeedForReg
 #Read-host
@@ -159,16 +168,18 @@ $Request.Settings.HostName = $MPHost
 [void]$Request.Discover() 
 $Request.AgentIdentity = $AgentIdentity
 $Request.NetBiosName = $Name
+
 $Request.Settings.Compression = [Microsoft.ConfigurationManagement.Messaging.Framework.MessageCompression]::Zlib
 $Request.Settings.ReplyCompression = [Microsoft.ConfigurationManagement.Messaging.Framework.MessageCompression]::Zlib
 $SMSID=$Request.RegisterClient($Sender, [TimeSpan]::FromMinutes(5))
 }
 write-host "SMSID is Now: " $SMSID
 $Message =[Microsoft.ConfigurationManagement.Messaging.Messages.ConfigMgrStatusMessage]::new()
+$Message.Settings.HostName=$MPHost
 $Message.Discover()
 $Message.Initialize()
 $Message.StatusMessage.StatusMessageType= $ClassName
-$Message.Settings.HostName=$MPHost
+								  
 $Message.SmsId=$SMSID
 write-host ""
 Write-host "Properties:"
