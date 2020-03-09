@@ -1,7 +1,7 @@
 #	Version 0.4
 #
-#   0.4:
-#   Added message severity.(With a custom MessageId)    
+#   	0.4:
+#   	Added message severity.(With a custom MessageId)    
 #
 #	0.2:
 #	Fixed multiple computer resources beeing created.
