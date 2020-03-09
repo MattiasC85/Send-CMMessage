@@ -1,7 +1,8 @@
 #	Version 0.4
 #
 #   	0.4:
-#   	Added message severity.(With a custom MessageId)    
+#   	Added message severity.(With a custom MessageId)
+#	Compatible with the 5.1902.1006.1000 SDK
 #
 #	0.2:
 #	Fixed multiple computer resources beeing created.
