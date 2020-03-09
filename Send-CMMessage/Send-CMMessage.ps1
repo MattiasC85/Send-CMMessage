@@ -1,4 +1,7 @@
-#	Version 0.2
+#	Version 0.4
+#
+#   0.4:
+#   Added message severity.(With a custom MessageId)    
 #
 #	0.2:
 #	Fixed multiple computer resources beeing created.
@@ -37,15 +40,48 @@ Param (
    [Parameter(ValueFromPipelineByPropertyName,Mandatory=$False)]
    [string] $SMS_Component,
    [Parameter(ValueFromPipelineByPropertyName,Mandatory=$False)]
-   [string] $ClassName = "SMS_GenericStatusMessage_info"            #You can add more classes by using [Microsoft.ConfigurationManagement.Messaging.StatusMessages.StatusMessageGenerator]::new() _
-                                                                    #and saving default props/quals to files named "class"props.txt and "class"quals.txt by using $_.GatherStatusMessageProperties("ClassName") Eg.:  $_.GatherStatusMessageProperties("SMS_GenericStatusMessage_info") 
+   [string] $ClassName = "SMS_GenericStatusMessage_Info",                #You can add more classes by using [Microsoft.ConfigurationManagement.Messaging.StatusMessages.StatusMessageGenerator]::new() _
+   [Parameter(ValueFromPipelineByPropertyName,Mandatory=$False)]    #and saving default props/quals to files named "class"props.txt and "class"quals.txt by using $_.GatherStatusMessageProperties("ClassName") Eg.:  $_.GatherStatusMessageProperties("SMS_GenericStatusMessage_info") 
+   [ValidateSet("Info","Warning","Error")]
+   [string] $MessageSeverity = "Info"
 )
 
 
+Switch($MessageSeverity)
+{
+"Info"      {$MsgSeverityInt=1073741824}
+"Warning"   {$MsgSeverityInt=2147483648}
+"Error"     {$MsgSeverityInt=3221225472}
+}
 
 $ScriptDir=Split-path $Script:myInvocation.MyCommand.Definition
 write-host ""
+
+$Dlls=@("$ScriptDir\Microsoft.ConfigurationManagement.Messaging.dll","$ScriptDir\Microsoft.ConfigurationManagement.Security.Cryptography.dll")
+$DllsExists=$true
+
+Foreach ($Dll in $Dlls)
+{
+    if ((Test-Path $Dll) -eq $false)
+    {
+        Write-host "Missing $Dll" -ForegroundColor Red
+        $DllsExists=$False
+    }
+}
+
+if ($DllsExists -eq $False)
+{
+    write-host ""
+    Write-host "Download the CCM Messaging Dlls here: https://www.nuget.org/packages/Microsoft.ConfigurationManagement.Messaging" -ForegroundColor Yellow
+    write-host "The script has been verified to work with 5.1902.1006.1000" -ForegroundColor Yellow
+    break
+}
+
+#$DllInt=0
+#Test-Path $Dlls | % {write-host "$($Dlls[$Dllint]) exists: $_";$Dllint++}
+
 Add-type -path $ScriptDir\Microsoft.ConfigurationManagement.Messaging.dll
+Add-type -path $ScriptDir\Microsoft.ConfigurationManagement.Security.Cryptography.dll
 
 Start-Transcript -Path $env:TEMP\StatusMsg.log -Append
 #Add-type -path $ScriptDir"\Microsoft.ConfigurationManagement.Messaging.dll"
@@ -196,7 +232,6 @@ Get-Content $ScriptDir\$ClassName'Prop.txt' | Foreach-Object{
    $var[1]=$PSBoundParameters[$var[0]]
    }
    $Prop=[Microsoft.ConfigurationManagement.Messaging.Messages.StatusMessageProperty]::new(($var[0]),($var[1]))
-   write-host ($var[0] + "=" + $var[1])
    $Message.StatusMessage.Properties.Properties.Add($Prop)
    }
 
@@ -205,6 +240,11 @@ $Prop=[Microsoft.ConfigurationManagement.Messaging.Messages.StatusMessagePropert
 write-host $Prop.Name=($Prop.valueString)
 $Message.StatusMessage.Properties.Properties.Add($Prop)
 
+<#
+$Prop2=[Microsoft.ConfigurationManagement.Messaging.Messages.StatusMessageProperty]::new("Severity",1)
+write-host $Prop.Name=($Prop.valueString)
+$Message.StatusMessage.Properties.Properties.Add($Prop2)
+#>
 
 #$Mins=Get-TimeZone | % {$_.BaseUtcOffset.TotalMinutes}
 
@@ -234,6 +274,32 @@ Get-Content $ScriptDir\$ClassName'Quals.txt' | Foreach-Object{
     $var[1]=$PSBoundParameters[$var[0]]
     }
    #New-Variable -Name $var[0] -Value $var[1]
+   
+   
+   if ($var[0] -eq "SMS_MessageID")
+   {
+        If ($var[1].Length -le 5)     #If longer it has already been altered to include severity.
+        {
+            write-host ""
+            if ($var[1] -in ($null,0))
+            {
+                
+                Switch($MessageSeverity)
+                {
+                    "Info"      {$var[1]=39997}
+                    "Warning"   {$var[1]=39998}
+                    "Error"     {$var[1]=39999}
+                }
+                
+                write-host "MessageID was null/0 and is now changed to $($var[1])"
+            } 
+            $var[1]=([int]$var[1]+$MsgSeverityInt)
+            #write-host "Altering $var[0] value to $var[1]"
+            #write-host ""
+        }
+   }
+   
+
    $Qual=[Microsoft.ConfigurationManagement.Messaging.Messages.StatusMessageQualifier]::new(($var[0]),($var[1]))
    $Message.StatusMessage.Qualifiers.Qualifiers.Add($Qual)
    write-host ($var[0] + "=" + $var[1])
